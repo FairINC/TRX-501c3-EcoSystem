@@ -1,0 +1,21 @@
+{
+  "name": "solidity-compiler",
+  "version": "1.0.0",
+  "description": "Electron + Express Solidity Compiler",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron main.js",
+    "server": "node server.js"
+  },
+  "dependencies": {
+    "@openzeppelin/contracts": "^5.2.0",
+    "cors": "^2.8.5",
+    "express": "^4.21.2",
+    "fs": "^0.0.1-security",
+    "path": "^0.12.7",
+    "solc": "^0.8.28"
+  },
+  "devDependencies": {
+    "electron": "^34.3.0"
+  }
+}
