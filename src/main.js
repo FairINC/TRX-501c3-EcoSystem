@@ -4,23 +4,35 @@ const path = require('path');
 let mainWindow;
 
 app.whenReady().then(() => {
+    // Create the browser window
     mainWindow = new BrowserWindow({
         width: 800,
         height: 600,
         webPreferences: {
             nodeIntegration: true,
-            contextIsolation: false
-        }
+            contextIsolation: false,
+        },
     });
 
-    mainWindow.loadFile('index.html');
+    // Load the HTML file from the public folder
+    mainWindow.loadFile(path.join(__dirname, '..', 'public', 'index.html'));
+
+    // Open DevTools in case you need to debug
+    //mainWindow.webContents.openDevTools();
+
+    // Event to handle closing the app
+    app.on('window-all-closed', () => {
+        if (process.platform !== 'darwin') {
+            app.quit();
+        }
+    });
 });
 
 ipcMain.handle('select-file', async () => {
     const { filePaths } = await dialog.showOpenDialog({
-        title: "Select a Solidity File",
-        filters: [{ name: "Solidity Files", extensions: ["sol"] }],
-        properties: ["openFile"]
+        title: 'Select a Solidity File',
+        filters: [{ name: 'Solidity Files', extensions: ['sol'] }],
+        properties: ['openFile'],
     });
 
     return filePaths[0] || null;
