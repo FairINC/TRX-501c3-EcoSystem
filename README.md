@@ -71,5 +71,9 @@ cd <project_folder>
 ... npm install 
     npm run server
     npm start 
-
+```
 this will start a popup 
+
+![Screenshot](public/images/Screenshot/Screenshot%202025-02-27%20110033.png)
+
+![Screenshot](public/images/Screenshot/Screenshot%202025-02-27%20110056.png)
