@@ -4,18 +4,21 @@
   "description": "Electron + Express Solidity Compiler",
   "main": "src/main.js",
   "scripts": {
-    "start": "electron src/main.js",
-    "server": "node src/server.js"
-  },
+    "start": "concurrently \"npm run start-electron\" \"npm run start-server\" \"npm run start-deployer\"",
+    "start-electron": "electron src/main.js",
+    "start-server": "node src/server.js",  
+    "start-deployer": "node src/testdeploy.js"
+},
   "dependencies": {
     "@openzeppelin/contracts": "^5.2.0",
     "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
     "express": "^4.21.2",
-    "fs": "^0.0.1-security",
-    "path": "^0.12.7",
-    "solc": "^0.8.28"
+    "solc": "^0.8.28",
+    "tronweb": "^6.0.1"
   },
   "devDependencies": {
+    "concurrently": "^9.1.2",
     "electron": "^34.3.0"
   }
 }
