@@ -13,12 +13,12 @@ app.post('/compile', (req, res) => {
     const { filePath } = req.body;
 
     if (!filePath) {
-        return res.status(400).json({ error: 'Missing filePath parameter' });
+        return res.status(400).json({ error: 'No Solidity file path provided.' });
     }
 
-    const electronAppPath = path.join(__dirname, 'compiler.js');
+    console.log(`🔍 Compiling Solidity File: ${filePath}`);
 
-    exec(`electron ${electronAppPath} "${filePath}"`, (error, stdout, stderr) => {
+    exec(`node src/compiler.js "${filePath}"`, (error, stdout, stderr) => {
         let response = "";
 
         if (error) {

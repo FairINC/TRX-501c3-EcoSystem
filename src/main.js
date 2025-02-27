@@ -1,39 +1,36 @@
-const { app, BrowserWindow, ipcMain, dialog } = require('electron');
-const path = require('path');
+const { app, BrowserWindow, dialog, ipcMain } = require("electron");
+const path = require("path");
 
 let mainWindow;
 
 app.whenReady().then(() => {
-    // Create the browser window
     mainWindow = new BrowserWindow({
         width: 800,
         height: 600,
         webPreferences: {
             nodeIntegration: true,
-            contextIsolation: false,
-        },
-    });
-
-    // Load the HTML file from the public folder
-    mainWindow.loadFile(path.join(__dirname, '..', 'public', 'index.html'));
-
-    // Open DevTools in case you need to debug
-    //mainWindow.webContents.openDevTools();
-
-    // Event to handle closing the app
-    app.on('window-all-closed', () => {
-        if (process.platform !== 'darwin') {
-            app.quit();
+            contextIsolation: false
         }
     });
+
+    mainWindow.loadFile(path.join(__dirname, "../public/index.html"));
 });
 
-ipcMain.handle('select-file', async () => {
-    const { filePaths } = await dialog.showOpenDialog({
-        title: 'Select a Solidity File',
-        filters: [{ name: 'Solidity Files', extensions: ['sol'] }],
-        properties: ['openFile'],
+ipcMain.handle("select-folder", async () => {
+    const result = await dialog.showOpenDialog(mainWindow, {
+        properties: ["openDirectory"]
     });
+    return result.filePaths[0] || null;
+});
 
-    return filePaths[0] || null;
+ipcMain.handle("select-file", async () => {
+    const result = await dialog.showOpenDialog(mainWindow, {
+        properties: ["openFile"],
+        filters: [{ name: "Solidity Files", extensions: ["sol"] }]
+    });
+    return result.filePaths[0] || null;
+});
+
+app.on("window-all-closed", () => {
+    if (process.platform !== "darwin") app.quit();
 });
