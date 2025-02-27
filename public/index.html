@@ -3,30 +3,47 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Solidity Compiler</title>
+    <title>Solidity Compiler & Contract Deployment</title>
     <style>
         body { font-family: Arial, sans-serif; }
         pre { background: #f4f4f4; padding: 10px; border-radius: 5px; white-space: pre-wrap; }
+        button { margin: 5px; padding: 8px; font-size: 14px; }
     </style>
     <script src="/src/compile.js"></script>
 </head>
 <body>
 
     <h2>Compile Solidity Contract</h2>
-
     <button onclick="selectSolidityFile()">Select Solidity File</button>
     <p id="selectedFile">No file selected.</p>
-    
     <button onclick="compileContract()">Compile</button>
     
     <h3>Compilation Output:</h3>
     <pre id="output">Waiting for compilation...</pre>
 
+    <hr>
+
+    <h2>Deploy TRX-20 Contract</h2>
+    <button onclick="selectCompiledFolder()">Select Compiled Folder</button>
+    <p id="selectedFolder">No folder selected.</p>
+
+    <div id="constructorInputs"></div>  <!-- Dynamic constructor input fields -->
+
+    <button onclick="deployContract()">Deploy Contract</button>
+    
+    <h3>Deployment Output:</h3>
+    <pre id="deployOutput">Waiting for deployment...</pre>
+
     <script>
         const { ipcRenderer } = require('electron');
 
         let selectedFilePath = null;
+        let compiledFolderPath = null;
+        let constructorParams = [];
 
+        // ---------------------------------
+        // Select Solidity File for Compilation
+        // ---------------------------------
         async function selectSolidityFile() {
             selectedFilePath = await ipcRenderer.invoke('select-file');
             document.getElementById("selectedFile").innerText = selectedFilePath ? `📂 Selected: ${selectedFilePath}` : "❌ No file selected.";
@@ -47,20 +64,7 @@
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ filePath: selectedFilePath })
             })
-            .then(response => {
-                // Check if response is OK (status 200-299)
-                if (!response.ok) {
-                    throw new Error(`HTTP error! Status: ${response.status}`);
-                }
-
-                // Check if response is JSON
-                const contentType = response.headers.get("content-type");
-                if (contentType && contentType.includes("application/json")) {
-                    return response.json();  // Parse JSON response
-                } else {
-                    throw new Error("Expected JSON response, but got something else.");
-                }
-            })
+            .then(response => response.json())
             .then(data => {
                 if (data.error) {
                     outputElement.innerText += `❌ Error: ${data.error}\n`;
@@ -69,7 +73,92 @@
                 }
             })
             .catch(error => {
-                outputElement.innerText += `❌ Failed to connect or unexpected response: ${error}\n`;
+                outputElement.innerText += `❌ Compilation failed: ${error}\n`;
+            });
+        }
+
+        // ---------------------------------
+        // Select Compiled Folder & Detect Constructor Arguments
+        // ---------------------------------
+        async function selectCompiledFolder() {
+            compiledFolderPath = await ipcRenderer.invoke('select-folder');
+            document.getElementById("selectedFolder").innerText = compiledFolderPath 
+                ? `📂 Selected: ${compiledFolderPath}` 
+                : "❌ No folder selected.";
+
+            if (compiledFolderPath) {
+                loadConstructorParams();
+            }
+        }
+
+        function loadConstructorParams() {
+            fetch(`http://localhost:3001/get-abi?folderPath=${compiledFolderPath}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.error) {
+                        console.error("❌ Error loading ABI:", data.error);
+                        return;
+                    }
+
+                    const abi = data.abi;
+                    const constructorInputs = abi.find(entry => entry.type === "constructor")?.inputs || [];
+
+                    const inputDiv = document.getElementById("constructorInputs");
+                    inputDiv.innerHTML = "<h3>Constructor Arguments:</h3>";
+
+                    constructorParams = [];
+
+                    constructorInputs.forEach((param, index) => {
+                        inputDiv.innerHTML += `
+                            <label>${param.name} (${param.type}):</label>
+                            <input type="text" id="param${index}" placeholder="Enter ${param.type}">
+                            <br>
+                        `;
+                        constructorParams.push(param);
+                    });
+
+                    if (constructorParams.length === 0) {
+                        inputDiv.innerHTML += "<p>No constructor arguments required.</p>";
+                    }
+                })
+                .catch(error => {
+                    console.error("❌ Error fetching ABI:", error);
+                });
+        }
+
+        // ---------------------------------
+        // Deploy Contract with User Inputs
+        // ---------------------------------
+        function deployContract() {
+            const deployOutputElement = document.getElementById("deployOutput");
+
+            if (!compiledFolderPath) {
+                deployOutputElement.innerText = "❌ Please select a compiled folder first.";
+                return;
+            }
+
+            // Collect user inputs for constructor arguments
+            let args = constructorParams.map((_, index) => {
+                return document.getElementById(`param${index}`).value;
+            });
+
+            deployOutputElement.innerText = "⏳ Sending request to deploy...\n";
+
+            fetch('http://localhost:3001/deploy', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ compiledFolderPath, args })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    deployOutputElement.innerText += `❌ Deployment error: ${data.error}\n`;
+                } else {
+                    deployOutputElement.innerText += `✅ Deployment successful!\n\nContract Address: ${data.contractAddress}`;
+                }
+            })
+            .catch(error => {
+                deployOutputElement.innerText += `❌ Deployment failed: ${error}\n`;
             });
         }
     </script>
