@@ -9,28 +9,40 @@
         pre { background: #f4f4f4; padding: 10px; border-radius: 5px; white-space: pre-wrap; }
         button { margin: 5px; padding: 8px; font-size: 14px; }
     </style>
-    <script src="/src/compile.js"></script>
 </head>
 <body>
 
     <h2>Compile Solidity Contract</h2>
-    <button onclick="selectSolidityFile()">Select Solidity File</button>
+
+    <!-- GitHub Contracts Dropdown -->
+    <label for="githubContracts">GitHub Contracts:</label>
+    <select id="githubContracts">
+        <option value="">Loading...</option>
+    </select>
+    <button onclick="fetchGitHubContract()">Download & Use</button>
+    <br>
+
+    <!-- Local File Selection -->
+    <button onclick="selectSolidityFile()">Select Local Solidity File</button>
     <p id="selectedFile">No file selected.</p>
+
+    <!-- Compile Button -->
     <button onclick="compileContract()">Compile</button>
-    
+
     <h3>Compilation Output:</h3>
     <pre id="output">Waiting for compilation...</pre>
 
     <hr>
 
     <h2>Deploy TRX-20 Contract</h2>
+
     <button onclick="selectCompiledFolder()">Select Compiled Folder</button>
     <p id="selectedFolder">No folder selected.</p>
 
     <div id="constructorInputs"></div>  <!-- Dynamic constructor input fields -->
 
     <button onclick="deployContract()">Deploy Contract</button>
-    
+
     <h3>Deployment Output:</h3>
     <pre id="deployOutput">Waiting for deployment...</pre>
 
@@ -40,10 +52,69 @@
         let selectedFilePath = null;
         let compiledFolderPath = null;
         let constructorParams = [];
+        const GITHUB_CONTRACTS_URL = "https://api.github.com/repos/FairINC/TRX-501c3-EcoSystem/contents/contracts";
 
-        // ---------------------------------
-        // Select Solidity File for Compilation
-        // ---------------------------------
+        // ----------------------------
+        // Load GitHub Contracts into Dropdown
+        // ----------------------------
+        async function loadGitHubContracts() {
+            const dropdown = document.getElementById("githubContracts");
+            dropdown.innerHTML = "<option>Loading...</option>";
+
+            try {
+                const response = await fetch(GITHUB_CONTRACTS_URL);
+                const files = await response.json();
+
+                const solFiles = files.filter(file => file.name.endsWith(".sol"));
+
+                if (solFiles.length === 0) {
+                    dropdown.innerHTML = "<option>No Solidity files found</option>";
+                    return;
+                }
+
+                dropdown.innerHTML = "<option value=''>Select a contract</option>";
+                solFiles.forEach(file => {
+                    const option = document.createElement("option");
+                    option.value = file.download_url;
+                    option.textContent = file.name;
+                    dropdown.appendChild(option);
+                });
+            } catch (error) {
+                console.error("❌ Failed to load contracts from GitHub:", error);
+                dropdown.innerHTML = "<option>Error loading contracts</option>";
+            }
+        }
+
+        async function fetchGitHubContract() {
+            const dropdown = document.getElementById("githubContracts");
+            const selectedURL = dropdown.value;
+
+            if (!selectedURL) {
+                alert("❌ Please select a contract from the dropdown.");
+                return;
+            }
+
+            const response = await fetch(selectedURL);
+            const contractCode = await response.text();
+
+            const contractName = selectedURL.split("/").pop();
+            const localFilePath = `D:/TRX/contracts/${contractName}`;
+
+            fetch("http://localhost:3000/saveContract", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ contractName, contractCode })
+            })
+            .then(res => res.json())
+            .then(data => {
+                document.getElementById("selectedFile").innerText = `📂 Downloaded: ${localFilePath}`;
+            })
+            .catch(error => console.error("❌ Error saving contract:", error));
+        }
+
+        // ----------------------------
+        // Select Local Solidity File
+        // ----------------------------
         async function selectSolidityFile() {
             selectedFilePath = await ipcRenderer.invoke('select-file');
             document.getElementById("selectedFile").innerText = selectedFilePath ? `📂 Selected: ${selectedFilePath}` : "❌ No file selected.";
@@ -77,9 +148,9 @@
             });
         }
 
-        // ---------------------------------
+        // ----------------------------
         // Select Compiled Folder & Detect Constructor Arguments
-        // ---------------------------------
+        // ----------------------------
         async function selectCompiledFolder() {
             compiledFolderPath = await ipcRenderer.invoke('select-folder');
             document.getElementById("selectedFolder").innerText = compiledFolderPath 
@@ -126,9 +197,9 @@
                 });
         }
 
-        // ---------------------------------
-        // Deploy Contract with User Inputs
-        // ---------------------------------
+        // ----------------------------
+        // Deploy Contract with Constructor Arguments
+        // ----------------------------
         function deployContract() {
             const deployOutputElement = document.getElementById("deployOutput");
 
@@ -137,7 +208,6 @@
                 return;
             }
 
-            // Collect user inputs for constructor arguments
             let args = constructorParams.map((_, index) => {
                 return document.getElementById(`param${index}`).value;
             });
@@ -161,6 +231,8 @@
                 deployOutputElement.innerText += `❌ Deployment failed: ${error}\n`;
             });
         }
+
+        window.onload = loadGitHubContracts;
     </script>
 
 </body>
