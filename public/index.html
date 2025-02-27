@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Solidity Compiler</title>
+    <style>
+        body { font-family: Arial, sans-serif; }
+        pre { background: #f4f4f4; padding: 10px; border-radius: 5px; white-space: pre-wrap; }
+    </style>
+</head>
+<body>
+
+    <h2>Compile Solidity Contract</h2>
+
+    <button onclick="selectSolidityFile()">Select Solidity File</button>
+    <p id="selectedFile">No file selected.</p>
+    
+    <button onclick="compileContract()">Compile</button>
+    
+    <h3>Compilation Output:</h3>
+    <pre id="output">Waiting for compilation...</pre>
+
+    <script>
+        const { ipcRenderer } = require('electron');
+
+        let selectedFilePath = null;
+
+        async function selectSolidityFile() {
+            selectedFilePath = await ipcRenderer.invoke('select-file');
+            document.getElementById("selectedFile").innerText = selectedFilePath ? `📂 Selected: ${selectedFilePath}` : "❌ No file selected.";
+        }
+
+        function compileContract() {
+            const outputElement = document.getElementById("output");
+
+            if (!selectedFilePath) {
+                outputElement.innerText = "❌ Please select a Solidity file first.";
+                return;
+            }
+
+            outputElement.innerText = "⏳ Sending request to compile...\n";
+
+            fetch('http://localhost:3000/compile', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ filePath: selectedFilePath })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    outputElement.innerText += `❌ Error: ${data.error}\n`;
+                } else {
+                    outputElement.innerText += `✅ Compilation successful!\n\n${data.output}`;
+                }
+            })
+            .catch(error => {
+                outputElement.innerText += `❌ Failed to connect: ${error}\n`;
+            });
+        }
+    </script>
+
+</body>
+</html>
