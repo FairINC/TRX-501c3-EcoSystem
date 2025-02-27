@@ -8,6 +8,7 @@
         body { font-family: Arial, sans-serif; }
         pre { background: #f4f4f4; padding: 10px; border-radius: 5px; white-space: pre-wrap; }
     </style>
+    <script src="/src/compile.js"></script>
 </head>
 <body>
 
@@ -46,7 +47,20 @@
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ filePath: selectedFilePath })
             })
-            .then(response => response.json())
+            .then(response => {
+                // Check if response is OK (status 200-299)
+                if (!response.ok) {
+                    throw new Error(`HTTP error! Status: ${response.status}`);
+                }
+
+                // Check if response is JSON
+                const contentType = response.headers.get("content-type");
+                if (contentType && contentType.includes("application/json")) {
+                    return response.json();  // Parse JSON response
+                } else {
+                    throw new Error("Expected JSON response, but got something else.");
+                }
+            })
             .then(data => {
                 if (data.error) {
                     outputElement.innerText += `❌ Error: ${data.error}\n`;
@@ -55,7 +69,7 @@
                 }
             })
             .catch(error => {
-                outputElement.innerText += `❌ Failed to connect: ${error}\n`;
+                outputElement.innerText += `❌ Failed to connect or unexpected response: ${error}\n`;
             });
         }
     </script>
