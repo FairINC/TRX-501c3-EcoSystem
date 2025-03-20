@@ -1,72 +1,64 @@
 // SPDX-License-Identifier: GPL-3.0
 pragma solidity >=0.7.0 <0.9.0;
 
-/**
- * @title Ballot
- * @dev Implements a basic voting system with delegation.
- */
 contract Ballot {
-
-    /// @notice Struct to define a Voter
+   
     struct Voter {
-        uint weight; // Weight of vote (1 for regular voters, 2 for chairperson)
-        bool voted; // If true, the voter has already cast their vote
-        address delegate; // Address to which the voter delegated their vote
-        uint castVote; // The proposal index they voted for
+        uint weight;
+        bool voted;
+        address delegate;
+        uint castVote;
     }
 
-    /// @notice Struct to define a Proposal
     struct Proposal {
-        bytes32 name; // Name of the proposal (should be customized)
-        uint voteCount; // Number of votes received
+        bytes32 name;
+        uint voteCount;
     }
 
-    address public chairperson; // Address of the chairperson who manages voting rights
+    address public chairperson;
+    string public question;
+    mapping(address => Voter) private voters;
+    Proposal[] private proposals;
+    address[] private authorizedWalletList;
+    mapping(address => bool) private authorizedWallets;
 
-    mapping(address => Voter) public voters; // Mapping of addresses to voter details
+    constructor(string memory _question, string[] memory proposalNames, address[] memory wallets) {
+        chairperson = msg.sender;
+        question = _question;
+        voters[chairperson].weight = 2;
 
-    Proposal[] public proposals; // Array of proposals to be voted on
-
-    /**
-     * @dev Contract constructor that initializes the ballot with proposal names
-     * @param proposalNames Array of proposal names (should be customized when deploying)
-     */
-    constructor(bytes32[] memory proposalNames) {
-        chairperson = msg.sender; // Assign the deployer as the chairperson
-        voters[chairperson].weight = 2; // Chairperson gets double voting power
-
-        // Initialize proposals with provided names
         for (uint i = 0; i < proposalNames.length; i++) {
             proposals.push(Proposal({
-                name: proposalNames[i],
+                name: stringToBytes32(proposalNames[i]),
                 voteCount: 0
             }));
         }
+
+        for (uint j = 0; j < wallets.length; j++) {
+            authorizedWallets[wallets[j]] = true;
+            authorizedWalletList.push(wallets[j]);
+            voters[wallets[j]].weight = 1;
+        }
     }
 
-    /**
-     * @notice Gives the right to vote to a specific address
-     * @dev Only the chairperson can grant voting rights
-     * @param voter Address of the voter to be given rights
-     */
-    function giveRightToVote(address voter) public {
-        require(msg.sender == chairperson, "Only chairperson can give right to vote.");
-        require(!voters[voter].voted, "The voter already voted.");
-        require(voters[voter].weight == 0, "Voter already has the right.");
-        
-        voters[voter].weight = 1; // Assign a voting weight of 1
+    function getAllProposals() public view returns (string[] memory) {
+        string[] memory proposalList = new string[](proposals.length);
+        for (uint i = 0; i < proposals.length; i++) {
+            proposalList[i] = bytes32ToString(proposals[i].name);
+        }
+        return proposalList;
     }
 
-    /**
-     * @notice Delegate your vote to another voter
-     * @param to Address of the voter to whom the vote is delegated
-     */
+    function getAllAuthorizedWallets() public view returns (address[] memory) {
+        return authorizedWalletList;
+    }
+
     function delegate(address to) public {
+        require(authorizedWallets[msg.sender], "Not authorized to vote.");
         Voter storage sender = voters[msg.sender];
         require(!sender.voted, "You already voted.");
         require(to != msg.sender, "Self-delegation is disallowed.");
 
-        // Prevent circular delegation loops
         while (voters[to].delegate != address(0)) {
             to = voters[to].delegate;
             require(to != msg.sender, "Found loop in delegation.");
@@ -77,49 +69,107 @@ contract Ballot {
         Voter storage delegate_ = voters[to];
 
         if (delegate_.voted) {
-            // If delegate already voted, add weight to their chosen proposal
             proposals[delegate_.castVote].voteCount += sender.weight;
         } else {
-            // Otherwise, add weight to delegate's account
             delegate_.weight += sender.weight;
         }
     }
 
-    /**
-     * @notice Cast a vote for a proposal
-     * @param proposal Index of the proposal being voted for
-     */
-    function castVote(uint proposal) public {
-        Voter storage sender = voters[msg.sender];
-        require(sender.weight != 0, "Has no right to vote.");
-        require(!sender.voted, "Already voted.");
-        require(proposal < proposals.length, "Invalid proposal index.");
-
-        sender.voted = true;
-        sender.castVote = proposal;
-        proposals[proposal].voteCount += sender.weight;
+    function addProposal(string memory newProposal) public {
+        require(authorizedWallets[msg.sender], "Not authorized to propose.");
+        proposals.push(Proposal({
+            name: stringToBytes32(newProposal),
+            voteCount: 0
+        }));
     }
 
-    /**
-     * @notice Computes the winning proposal based on vote count
-     * @return winningProposal_ Index of the winning proposal
-     */
-    function winningProposal() public view returns (uint winningProposal_) {
+    function winningProposal() public view returns (string memory) {
         uint winningVoteCount = 0;
+        uint winningProposalIndex = 0;
 
         for (uint p = 0; p < proposals.length; p++) {
             if (proposals[p].voteCount > winningVoteCount) {
                 winningVoteCount = proposals[p].voteCount;
-                winningProposal_ = p;
+                winningProposalIndex = p;
             }
+        }
+
+        return bytes32ToString(proposals[winningProposalIndex].name);
+    }
+
+    function currentVotes() public view returns (string memory result) {
+        result = string(abi.encodePacked("Voting results:\n"));
+        for (uint i = 0; i < proposals.length; i++) {
+            result = string(abi.encodePacked(
+                result, 
+                bytes32ToString(proposals[i].name), ": ", 
+                uintToString(proposals[i].voteCount), "\n"
+            ));
         }
     }
 
-    /**
-     * @notice Returns the name of the winning proposal
-     * @return winnerName_ Name of the winning proposal
-     */
-    function winnerName() public view returns (bytes32 winnerName_) {
-        winnerName_ = proposals[winningProposal()].name;
+    function castVote(uint proposalIndex) public {
+        castPartialVote(proposalIndex, 1);
+    }
+
+    function castPartialVote(uint proposalIndex, uint numVotes) public {
+        require(authorizedWallets[msg.sender], "Not authorized to vote.");
+        Voter storage sender = voters[msg.sender];
+        require(sender.weight >= numVotes, "Insufficient voting weight.");
+        require(!sender.voted, "Already voted.");
+        require(proposalIndex < proposals.length, "Invalid proposal index");
+
+        sender.voted = true;
+        sender.castVote = proposalIndex;
+        proposals[proposalIndex].voteCount += numVotes;
+        sender.weight -= numVotes;
+    }
+
+    function abstain() public {
+        require(authorizedWallets[msg.sender], "Not authorized to vote.");
+        Voter storage sender = voters[msg.sender];
+        require(sender.weight != 0, "No right to vote.");
+        require(!sender.voted, "Already voted.");
+        
+        sender.voted = true;
+        sender.castVote = proposals.length;
+    }
+
+    function stringToBytes32(string memory source) internal pure returns (bytes32 result) {
+        require(bytes(source).length <= 32, "String too long!");
+        assembly {
+            result := mload(add(source, 32))
+        }
+    }
+
+    function bytes32ToString(bytes32 _bytes32) internal pure returns (string memory) {
+        uint8 i = 0;
+        while (i < 32 && _bytes32[i] != 0) {
+            i++;
+        }
+        bytes memory bytesArray = new bytes(i);
+        for (i = 0; i < 32 && _bytes32[i] != 0; i++) {
+            bytesArray[i] = _bytes32[i];
+        }
+        return string(bytesArray);
+    }
+
+    function uintToString(uint v) internal pure returns (string memory) {
+        if (v == 0) {
+            return "0";
+        }
+        uint j = v;
+        uint len;
+        while (j != 0) {
+            len++;
+            j /= 10;
+        }
+        bytes memory bstr = new bytes(len);
+        while (v != 0) {
+            len -= 1;
+            bstr[len] = bytes1(uint8(48 + v % 10));
+            v /= 10;
+        }
+        return string(bstr);
     }
 }
